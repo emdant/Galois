@@ -54,6 +54,8 @@ if(GALOIS_NUM_TEST_THREADS LESS_EQUAL 0)
   set(GALOIS_NUM_TEST_THREADS 1)
 endif()
 
+add_compile_options("-march=native")
+
 ###### Configure (users don't need to go beyond here) ######
 
 include(CTest)

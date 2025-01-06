@@ -54,6 +54,12 @@ static cll::opt<unsigned int>
     stepShift("delta",
               cll::desc("Shift value for the deltastep (default value 13)"),
               cll::init(13));
+static cll::opt<unsigned int>
+    sources("sources", cll::desc("Number of sources to test (default value 1)"),
+            cll::init(1));
+static cll::opt<unsigned int>
+    rounds("rounds", cll::desc("Number of rounds to test (default value 22)"),
+           cll::init(22));
 
 enum Algo {
   deltaTile = 0,
@@ -352,50 +358,7 @@ void topoTileAlgo(Graph& graph, const GNode& source) {
   galois::runtime::reportStat_Single("SSSP-topo", "rounds", rounds);
 }
 
-int main(int argc, char** argv) {
-  galois::SharedMemSys G;
-  LonestarStart(argc, argv, name, desc, url, &inputFile);
-
-  galois::StatTimer totalTime("TimerTotal");
-  totalTime.start();
-
-  Graph graph;
-  GNode source;
-  GNode report;
-
-  std::cout << "Reading from file: " << inputFile << "\n";
-  galois::graphs::readGraph(graph, inputFile);
-  std::cout << "Read " << graph.size() << " nodes, " << graph.sizeEdges()
-            << " edges\n";
-
-  if (startNode >= graph.size() || reportNode >= graph.size()) {
-    std::cerr << "failed to set report: " << reportNode
-              << " or failed to set source: " << startNode << "\n";
-    assert(0);
-    abort();
-  }
-
-  auto it = graph.begin();
-  std::advance(it, startNode.getValue());
-  source = *it;
-  it     = graph.begin();
-  std::advance(it, reportNode.getValue());
-  report = *it;
-
-  size_t approxNodeData = graph.size() * 64;
-  galois::preAlloc(numThreads +
-                   approxNodeData / galois::runtime::pagePoolSize());
-  galois::reportPageAlloc("MeminfoPre");
-
-  if (algo == deltaStep || algo == deltaTile || algo == serDelta ||
-      algo == serDeltaTile) {
-    std::cout << "INFO: Using delta-step of " << (1 << stepShift) << "\n";
-    std::cout
-        << "WARNING: Performance varies considerably due to delta parameter.\n";
-    std::cout
-        << "WARNING: Do not expect the default to be good for your graph.\n";
-  }
-
+void trial(Graph& graph, GNode source) {
   galois::do_all(galois::iterate(graph),
                  [&graph](GNode n) { graph.getData(n) = SSSP::DIST_INFINITY; });
 
@@ -461,10 +424,8 @@ int main(int argc, char** argv) {
 
   execTime.stop();
 
-  galois::reportPageAlloc("MeminfoPost");
-
-  std::cout << "Node " << reportNode << " has distance "
-            << graph.getData(report) << "\n";
+  std::cout << "Galois execution time: " << (double)execTime.get_usec() / 1e6
+            << "s" << std::endl;
 
   // Sanity checking code
   galois::GReduceMax<uint64_t> maxDistance;
@@ -491,9 +452,9 @@ int main(int argc, char** argv) {
   uint64_t rMaxDistance = maxDistance.reduce();
   uint64_t rDistanceSum = distanceSum.reduce();
   uint64_t rVisitedNode = visitedNode.reduce();
+
   galois::gInfo("# visited nodes is ", rVisitedNode);
   galois::gInfo("Max distance is ", rMaxDistance);
-  galois::gInfo("Sum of visited distances is ", rDistanceSum);
 
   if (!skipVerify) {
     if (SSSP::verify(graph, source)) {
@@ -502,8 +463,84 @@ int main(int argc, char** argv) {
       GALOIS_DIE("verification failed");
     }
   }
+}
 
-  totalTime.stop();
+template <typename NodeID_, typename rng_t_,
+          typename uNodeID_ = typename std::make_unsigned<NodeID_>::type>
+class UniDist {
+public:
+  UniDist(NodeID_ max_value, rng_t_& rng) : rng_(rng) {
+    no_mod_                  = rng_.max() == static_cast<uNodeID_>(max_value);
+    mod_                     = max_value + 1;
+    uNodeID_ remainder_sub_1 = rng_.max() % mod_;
+    if (remainder_sub_1 == mod_ - 1)
+      cutoff_ = 0;
+    else
+      cutoff_ = rng_.max() - remainder_sub_1;
+  }
 
+  NodeID_ operator()() {
+    uNodeID_ rand_num = rng_();
+    if (no_mod_)
+      return rand_num;
+    if (cutoff_ != 0) {
+      while (rand_num >= cutoff_)
+        rand_num = rng_();
+    }
+    return rand_num % mod_;
+  }
+
+private:
+  rng_t_& rng_;
+  bool no_mod_;
+  uNodeID_ mod_;
+  uNodeID_ cutoff_;
+};
+
+int main(int argc, char** argv) {
+  galois::SharedMemSys G;
+  LonestarStart(argc, argv, name, desc, url, &inputFile);
+
+  Graph graph;
+  GNode source;
+
+  std::cout << "Reading from file: " << inputFile << "\n";
+  galois::graphs::readGraph(graph, inputFile);
+  std::cout << "Read " << graph.size() << " nodes, " << graph.sizeEdges()
+            << " edges\n";
+
+  if (startNode >= graph.size()) {
+    std::cerr << "failed to set source: " << startNode << "\n";
+    assert(0);
+    abort();
+  }
+
+  auto it = graph.begin();
+  std::advance(it, startNode.getValue());
+  source = *it;
+  it     = graph.begin();
+
+  size_t approxNodeData = graph.size() * 64;
+  galois::preAlloc(numThreads +
+                   approxNodeData / galois::runtime::pagePoolSize());
+
+  std::mt19937_64 rng(27491095);
+  UniDist<GNode, std::mt19937_64> udist(graph.size() - 1, rng);
+
+  for (auto v = 0; v < sources.getValue(); v++) {
+    GNode s;
+    uint64_t deg;
+
+    do {
+      s   = udist();
+      deg = graph.getDegree(s);
+
+    } while (deg == 0);
+
+    std::cout << "source = " << s << std::endl;
+    for (auto i = 0; i <= rounds.getValue(); i++) {
+      trial(graph, s);
+    }
+  }
   return 0;
 }

@@ -648,6 +648,18 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
         GALOIS_DIE("failed to open input file");
       }
 
+      bool undirected;
+
+      std::string start, object, format, field, symmetry;
+      infile >> start >> object >> format >> field >> symmetry >> std::ws;
+      if (symmetry == "symmetric") {
+        undirected = true;
+      } else if ((symmetry == "general") || (symmetry == "skew-symmetric")) {
+        undirected = false;
+      } else {
+        GALOIS_DIE("unknown symmetry: ", symmetry);
+      }
+
       // Skip comments
       while (infile) {
         if (infile.peek() != '%') {
@@ -676,6 +688,9 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
       // nedges = std::stoull(tokens[2]);
       nnodes = strtoull(tokens[0].c_str(), NULL, 0);
       nedges = strtoull(tokens[2].c_str(), NULL, 0);
+      // if (undirected) {
+      //   nedges *= 2;
+      // }
 
       // Parse edges
       if (phase == 0) {
@@ -687,9 +702,10 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
       }
 
       for (size_t edge_num = 0; edge_num < nedges; ++edge_num) {
-        if ((nedges / 500 > 0) && (edge_num % (nedges / 500)) == 0) {
+        if ((nedges / 100000000 > 0) && (edge_num % 100000000) == 0) {
           printf("Phase %d: current edge progress %lf%%\n", phase,
                  ((double)edge_num / nedges) * 100);
+          fflush(stdout);
         }
         uint32_t cur_id, neighbor_id;
         double weight = 1;
@@ -705,12 +721,19 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
         // 1 indexed
         if (phase == 0) {
           p.incrementDegree(cur_id - 1);
+          // if (undirected)
+          //   p.incrementDegree(neighbor_id - 1);
         } else {
           if constexpr (std::is_void<EdgeTy>::value) {
             p.addNeighbor(cur_id - 1, neighbor_id - 1);
+            // if (undirected)
+            //   p.addNeighbor(neighbor_id - 1, cur_id - 1);
           } else {
             p.addNeighbor<EdgeTy>(cur_id - 1, neighbor_id - 1,
                                   static_cast<EdgeTy>(weight));
+            // if (undirected)
+            //   p.addNeighbor<EdgeTy>(neighbor_id - 1, cur_id - 1,
+            //                         static_cast<EdgeTy>(weight));
           }
         }
 
@@ -719,10 +742,14 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
 
       infile.peek();
       if (!infile.eof()) {
+        printf("next char: %c\n", infile.peek());
+        fflush(stdout);
         GALOIS_DIE("additional lines in file");
       }
     }
     // this is for the progress print
+
+    std::cout << "finished parsing\n";
 
     p.finish();
 
