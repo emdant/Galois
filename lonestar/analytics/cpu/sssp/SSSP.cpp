@@ -100,7 +100,7 @@ using Graph = galois::graphs::LC_CSR_Graph<std::atomic<uint32_t>, uint32_t>::
 typedef Graph::GraphNode GNode;
 
 constexpr static const bool TRACK_WORK          = false;
-constexpr static const unsigned CHUNK_SIZE      = 64U;
+constexpr static const unsigned CHUNK_SIZE      = 128U;
 constexpr static const ptrdiff_t EDGE_TILE_SIZE = 512;
 
 using SSSP                 = BFS_SSSP<Graph, uint32_t, true, EDGE_TILE_SIZE>;
