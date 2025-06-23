@@ -30,6 +30,7 @@
 #include <iostream>
 #include <limits>
 #include <cstdint>
+#include <utility>
 #include <vector>
 #include <random>
 #include <string>
@@ -637,18 +638,18 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
   template <typename EdgeTy>
   void convert(const std::string& infilename, const std::string& outfilename) {
     typedef galois::graphs::FileGraphWriter Writer;
+    typedef galois::graphs::FileGraph Graph;
 
     Writer p;
     uint32_t nnodes;
     size_t nedges;
+    bool undirected = false;
 
     for (int phase = 0; phase < 2; ++phase) {
       std::ifstream infile(infilename.c_str());
       if (!infile) {
         GALOIS_DIE("failed to open input file");
       }
-
-      bool undirected;
 
       std::string start, object, format, field, symmetry;
       infile >> start >> object >> format >> field >> symmetry >> std::ws;
@@ -688,9 +689,6 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
       // nedges = std::stoull(tokens[2]);
       nnodes = strtoull(tokens[0].c_str(), NULL, 0);
       nedges = strtoull(tokens[2].c_str(), NULL, 0);
-      // if (undirected) {
-      //   nedges *= 2;
-      // }
 
       // Parse edges
       if (phase == 0) {
@@ -721,19 +719,12 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
         // 1 indexed
         if (phase == 0) {
           p.incrementDegree(cur_id - 1);
-          // if (undirected)
-          //   p.incrementDegree(neighbor_id - 1);
         } else {
           if constexpr (std::is_void<EdgeTy>::value) {
             p.addNeighbor(cur_id - 1, neighbor_id - 1);
-            // if (undirected)
-            //   p.addNeighbor(neighbor_id - 1, cur_id - 1);
           } else {
             p.addNeighbor<EdgeTy>(cur_id - 1, neighbor_id - 1,
                                   static_cast<EdgeTy>(weight));
-            // if (undirected)
-            //   p.addNeighbor<EdgeTy>(neighbor_id - 1, cur_id - 1,
-            //                         static_cast<EdgeTy>(weight));
           }
         }
 
@@ -750,11 +741,18 @@ struct Mtx2Gr : public HasNoVoidSpecialization {
     // this is for the progress print
 
     std::cout << "finished parsing\n";
-
     p.finish();
 
-    p.toFile(outfilename);
-    printStatus(p.size(), p.sizeEdges());
+    if (undirected) {
+      Graph symmetric;
+      galois::graphs::makeSymmetric<EdgeTy>(p, symmetric);
+
+      symmetric.toFile(outfilename);
+      printStatus(symmetric.size(), symmetric.sizeEdges());
+    } else {
+      p.toFile(outfilename);
+      printStatus(p.size(), p.sizeEdges());
+    }
   }
 };
 
