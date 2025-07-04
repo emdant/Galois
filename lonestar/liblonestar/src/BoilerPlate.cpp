@@ -59,23 +59,22 @@ void LonestarStart(int argc, char** argv, const char* app, const char* desc,
   llvm::cl::ParseCommandLineOptions(argc, argv);
   numThreads = galois::setActiveThreads(numThreads);
 
-  // galois::runtime::setStatFile(statFile);
+  galois::runtime::setStatFile(statFile);
 
-  // LonestarPrintVersion(llvm::outs());
-  // llvm::outs() << "Copyright (C) " << galois::getCopyrightYear()
-  //              << " The University of Texas at Austin\n";
-  // llvm::outs() << "http://iss.ices.utexas.edu/galois/\n\n";
-  // llvm::outs() << "application: " << (app ? app : "unspecified") << "\n";
-  // if (desc) {
-  //   llvm::outs() << desc << "\n";
-  // }
-  // if (url) {
-  //   llvm::outs() <<
-  //   "http://iss.ices.utexas.edu/?p=projects/galois/benchmarks/"
-  //                << url << "\n";
-  // }
-  // llvm::outs() << "\n";
-  // llvm::outs().flush();
+  LonestarPrintVersion(llvm::outs());
+  llvm::outs() << "Copyright (C) " << galois::getCopyrightYear()
+               << " The University of Texas at Austin\n";
+  llvm::outs() << "http://iss.ices.utexas.edu/galois/\n\n";
+  llvm::outs() << "application: " << (app ? app : "unspecified") << "\n";
+  if (desc) {
+    llvm::outs() << desc << "\n";
+  }
+  if (url) {
+    llvm::outs() << "http://iss.ices.utexas.edu/?p=projects/galois/benchmarks/"
+                 << url << "\n";
+  }
+  llvm::outs() << "\n";
+  llvm::outs().flush();
 
   std::ostringstream cmdout;
   for (int i = 0; i < argc; ++i) {
@@ -85,14 +84,14 @@ void LonestarStart(int argc, char** argv, const char* app, const char* desc,
     }
   }
 
-  // galois::runtime::reportParam("(NULL)", "CommandLine", cmdout.str());
+  galois::runtime::reportParam("(NULL)", "CommandLine", cmdout.str());
   galois::runtime::reportParam("(NULL)", "Threads", numThreads);
-  // galois::runtime::reportParam("(NULL)", "Hosts", 1);
+  galois::runtime::reportParam("(NULL)", "Hosts", 1);
   if (input) {
     galois::runtime::reportParam("(NULL)", "Input", input->getValue());
   }
 
-  // char name[256];
-  // gethostname(name, 256);
-  // galois::runtime::reportParam("(NULL)", "Hostname", name);
+  char name[256];
+  gethostname(name, 256);
+  galois::runtime::reportParam("(NULL)", "Hostname", name);
 }
