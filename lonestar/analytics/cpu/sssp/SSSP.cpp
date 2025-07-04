@@ -453,7 +453,7 @@ void trial(Graph& graph, GNode source) {
 
   // report sanity stats
   uint64_t rMaxDistance = maxDistance.reduce();
-  uint64_t rDistanceSum = distanceSum.reduce();
+  // uint64_t rDistanceSum = distanceSum.reduce();
   uint64_t rVisitedNode = visitedNode.reduce();
 
   // std::cout << "Number of relaxations: " << Relaxations << std::endl;
@@ -507,7 +507,6 @@ int main(int argc, char** argv) {
   LonestarStart(argc, argv, name, desc, url, &inputFile);
 
   Graph graph;
-  GNode source;
 
   std::cout << "Reading from file: " << inputFile << "\n";
   galois::graphs::readGraph(graph, inputFile);
@@ -521,9 +520,7 @@ int main(int argc, char** argv) {
   }
 
   auto it = graph.begin();
-  std::advance(it, startNode.getValue());
-  source = *it;
-  it     = graph.begin();
+  it      = graph.begin();
 
   size_t approxNodeData = graph.size() * 64;
   galois::preAlloc(numThreads +
@@ -532,7 +529,7 @@ int main(int argc, char** argv) {
   std::mt19937_64 rng(27491095);
   UniDist<GNode, std::mt19937_64> udist(graph.size() - 1, rng);
 
-  for (auto v = 0; v < sources.getValue(); v++) {
+  for (unsigned int v = 0; v < sources.getValue(); v++) {
     GNode s;
     uint64_t deg;
 
@@ -543,7 +540,7 @@ int main(int argc, char** argv) {
     } while (deg == 0);
 
     std::cout << "source = " << s << std::endl;
-    for (auto i = 0; i <= rounds.getValue(); i++) {
+    for (unsigned int i = 0; i <= rounds.getValue(); i++) {
       trial(graph, s);
     }
   }
