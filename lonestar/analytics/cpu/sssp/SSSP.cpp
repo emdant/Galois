@@ -120,12 +120,16 @@ using OBIM    = gwl::OrderedByIntegerMetric<UpdateRequestIndexer, PSchunk>;
 using OBIM_Barrier =
     gwl::OrderedByIntegerMetric<UpdateRequestIndexer,
                                 PSchunk>::with_barrier<true>::type;
-// std::atomic<size_t> Relaxations;
+#ifdef COUNT_RELAX
+std::atomic<size_t> Relaxations;
+#endif
 
 template <typename T, typename OBIMTy = OBIM, typename P, typename R>
 void deltaStepAlgo(Graph& graph, GNode source, const P& pushWrap,
                    const R& edgeRange) {
-  // Relaxations = 0;
+#ifdef COUNT_RELAX
+  Relaxations = 0;
+#endif
 
   //! [reducible for self-defined stats]
   galois::GAccumulator<size_t> BadWork;
@@ -156,7 +160,9 @@ void deltaStepAlgo(Graph& graph, GNode source, const P& pushWrap,
           Dist ew            = graph.getEdgeData(ii, flag);
           const Dist newDist = sdata + ew;
           Dist oldDist       = galois::atomicMin<uint32_t>(ddist, newDist);
-          // Relaxations++;
+#ifdef COUNT_RELAX
+          Relaxations++;
+#endif
           if (newDist < oldDist) {
             if (TRACK_WORK) {
               //! [per-thread contribution of self-defined stats]
@@ -456,8 +462,9 @@ void trial(Graph& graph, GNode source) {
   // uint64_t rDistanceSum = distanceSum.reduce();
   uint64_t rVisitedNode = visitedNode.reduce();
 
-  // std::cout << "Number of relaxations: " << Relaxations << std::endl;
-
+#ifdef COUNT_RELAX
+  std::cout << "Number of relaxations: " << Relaxations << std::endl;
+#endif
   galois::gInfo("# visited nodes is ", rVisitedNode);
   galois::gInfo("Max distance is ", rMaxDistance);
 
