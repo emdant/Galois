@@ -19,6 +19,7 @@
 
 #ifndef LONESTAR_BFS_SSSP_H
 #define LONESTAR_BFS_SSSP_H
+#include <cmath>
 #include <iostream>
 #include <cstdlib>
 
@@ -48,15 +49,20 @@ struct BFS_SSSP {
   };
 
   struct UpdateRequestIndexer {
-    unsigned shift;
+    int shift;
 
     template <typename R>
     unsigned int operator()(const R& req) const {
-      unsigned int t = req.dist >> shift;
-      return t;
+      if constexpr (std::is_floating_point_v<decltype(req.dist)>) {
+        static float delta = std::pow(2.0f, shift);
+        unsigned int t     = req.dist / delta;
+        return t;
+      } else {
+        unsigned int t = req.dist >> shift;
+        return t;
+      }
     }
   };
-
   struct SrcEdgeTile {
     GNode src;
     Dist dist;

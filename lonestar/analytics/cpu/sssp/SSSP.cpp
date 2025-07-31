@@ -50,7 +50,7 @@ static cll::opt<unsigned int>
     reportNode("reportNode",
                cll::desc("Node to report distance to(default value 1)"),
                cll::init(1));
-static cll::opt<unsigned int>
+static cll::opt<int>
     stepShift("delta",
               cll::desc("Shift value for the deltastep (default value 13)"),
               cll::init(13));
@@ -93,9 +93,16 @@ static cll::opt<Algo> algo(
                           "auto: choose among the algorithms automatically")),
     cll::init(AutoAlgo));
 
+#ifdef USE_FLOAT
+typedef float weight_type;
+#else
+typedef uint32_t weight_type;
+#endif
+
 //! [withnumaalloc]
-using Graph = galois::graphs::LC_CSR_Graph<std::atomic<uint32_t>, uint32_t>::
-    with_no_lockable<true>::type ::with_numa_alloc<true>::type;
+using Graph =
+    galois::graphs::LC_CSR_Graph<std::atomic<weight_type>, weight_type>::
+        with_no_lockable<true>::type ::with_numa_alloc<true>::type;
 //! [withnumaalloc]
 typedef Graph::GraphNode GNode;
 
@@ -103,7 +110,7 @@ constexpr static const bool TRACK_WORK          = false;
 constexpr static const unsigned CHUNK_SIZE      = 128U;
 constexpr static const ptrdiff_t EDGE_TILE_SIZE = 512;
 
-using SSSP                 = BFS_SSSP<Graph, uint32_t, true, EDGE_TILE_SIZE>;
+using SSSP                 = BFS_SSSP<Graph, weight_type, true, EDGE_TILE_SIZE>;
 using Dist                 = SSSP::Dist;
 using UpdateRequest        = SSSP::UpdateRequest;
 using UpdateRequestIndexer = SSSP::UpdateRequestIndexer;
@@ -159,7 +166,7 @@ void deltaStepAlgo(Graph& graph, GNode source, const P& pushWrap,
           auto& ddist        = graph.getData(dst, flag);
           Dist ew            = graph.getEdgeData(ii, flag);
           const Dist newDist = sdata + ew;
-          Dist oldDist       = galois::atomicMin<uint32_t>(ddist, newDist);
+          Dist oldDist       = galois::atomicMin<weight_type>(ddist, newDist);
 #ifdef COUNT_RELAX
           Relaxations++;
 #endif
@@ -437,8 +444,8 @@ void trial(Graph& graph, GNode source) {
             << "s" << std::endl;
 
   // Sanity checking code
-  galois::GReduceMax<uint64_t> maxDistance;
-  galois::GAccumulator<uint64_t> distanceSum;
+  galois::GReduceMax<weight_type> maxDistance;
+  galois::GAccumulator<weight_type> distanceSum;
   galois::GAccumulator<uint32_t> visitedNode;
   maxDistance.reset();
   distanceSum.reset();
@@ -446,8 +453,8 @@ void trial(Graph& graph, GNode source) {
 
   galois::do_all(
       galois::iterate(graph),
-      [&](uint64_t i) {
-        uint32_t myDistance = graph.getData(i);
+      [&](weight_type i) {
+        weight_type myDistance = graph.getData(i);
 
         if (myDistance != SSSP::DIST_INFINITY) {
           maxDistance.update(myDistance);
@@ -458,7 +465,7 @@ void trial(Graph& graph, GNode source) {
       galois::loopname("Sanity check"), galois::no_stats());
 
   // report sanity stats
-  uint64_t rMaxDistance = maxDistance.reduce();
+  weight_type rMaxDistance = maxDistance.reduce();
   // uint64_t rDistanceSum = distanceSum.reduce();
   uint64_t rVisitedNode = visitedNode.reduce();
 
