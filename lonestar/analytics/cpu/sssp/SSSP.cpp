@@ -453,7 +453,7 @@ void trial(Graph& graph, GNode source) {
 
   galois::do_all(
       galois::iterate(graph),
-      [&](weight_type i) {
+      [&](uint64_t i) {
         weight_type myDistance = graph.getData(i);
 
         if (myDistance != SSSP::DIST_INFINITY) {
@@ -553,8 +553,8 @@ int main(int argc, char** argv) {
 
     } while (deg == 0);
 
-    std::cout << "source = " << s << std::endl;
-    for (unsigned int i = 0; i <= rounds.getValue(); i++) {
+    std::cout << std::endl << "source = " << s << std::endl;
+    for (unsigned int i = 0; i < rounds.getValue(); i++) {
       trial(graph, s);
     }
   }

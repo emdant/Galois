@@ -21,6 +21,7 @@
 #include "galois/LargeArray.h"
 #include "galois/graphs/FileGraph.h"
 
+#include <cstddef>
 #include <llvm/Support/CommandLine.h>
 
 #include <boost/mpl/if.hpp>
