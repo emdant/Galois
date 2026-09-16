@@ -20,6 +20,7 @@
 #ifndef GALOIS_SUBSTRATE_NUMAMEM
 #define GALOIS_SUBSTRATE_NUMAMEM
 
+#include <cstdint>
 #include <cstddef>
 #include <memory>
 #include <vector>

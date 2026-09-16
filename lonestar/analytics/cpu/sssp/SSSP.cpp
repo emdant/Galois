@@ -27,6 +27,7 @@
 #include "Lonestar/BoilerPlate.h"
 #include "Lonestar/BFS_SSSP.h"
 #include "Lonestar/Utils.h"
+#include "Lonestar/WsgGraph.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -522,8 +523,15 @@ int main(int argc, char** argv) {
 
   Graph graph;
 
-  std::cout << "Reading from file: " << inputFile << "\n";
-  galois::graphs::readGraph(graph, inputFile);
+  // GAP serialized graphs (.wsg) are read directly, so this reads the very same
+  // file as wasp and the other implementations in the harness and node numbering
+  // matches by construction; .gr is still accepted.
+  if (isWsgFilename(inputFile)) {
+    readWsgGraph<Graph, weight_type>(graph, inputFile);
+  } else {
+    std::cout << "Reading from file: " << inputFile << "\n";
+    galois::graphs::readGraph(graph, inputFile);
+  }
   std::cout << "Read " << graph.size() << " nodes, " << graph.sizeEdges()
             << " edges\n";
 
