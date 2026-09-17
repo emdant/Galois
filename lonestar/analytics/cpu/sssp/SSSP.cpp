@@ -61,6 +61,10 @@ static cll::opt<unsigned int>
 static cll::opt<unsigned int>
     rounds("rounds", cll::desc("Number of rounds to test (default value 22)"),
            cll::init(22));
+static cll::opt<std::string> sourcesFile(
+    "sfile",
+    cll::desc("File of source nodes, one per line; overrides startNode"),
+    cll::init(""));
 
 enum Algo {
   deltaTile = 0,
@@ -517,6 +521,41 @@ private:
   uNodeID_ cutoff_;
 };
 
+static std::vector<unsigned int> readSourceIds(size_t graphSize) {
+  auto numSources = sources.getValue();
+  std::vector<unsigned int> sources_vector;
+
+  if (sourcesFile.empty()) {
+    sources_vector.push_back(startNode);
+    return sources_vector;
+  }
+
+  std::ifstream in(sourcesFile.c_str());
+  if (!in) {
+    std::cerr << "Could not open sources file " << sourcesFile << "\n";
+    abort();
+  }
+
+  unsigned int s;
+  while (sources_vector.size() < numSources && in >> s) {
+    if (s >= graphSize) {
+      std::cerr << "Source " << s << " out of range for a graph of "
+                << graphSize
+                << " nodes; the sources file does not match this graph\n";
+      abort();
+    }
+    sources_vector.push_back(s);
+  }
+
+  if (sources_vector.size() < numSources) {
+    std::cerr << "Sources file " << sourcesFile << " holds only "
+              << sources_vector.size() << " usable sources, " << numSources
+              << " requested\n";
+    abort();
+  }
+  return sources_vector;
+}
+
 int main(int argc, char** argv) {
   galois::SharedMemSys G;
   LonestarStart(argc, argv, name, desc, url, &inputFile);
@@ -524,8 +563,8 @@ int main(int argc, char** argv) {
   Graph graph;
 
   // GAP serialized graphs (.wsg) are read directly, so this reads the very same
-  // file as wasp and the other implementations in the harness and node numbering
-  // matches by construction; .gr is still accepted.
+  // file as wasp and the other implementations in the harness and node
+  // numbering matches by construction; .gr is still accepted.
   if (isWsgFilename(inputFile)) {
     readWsgGraph<Graph, weight_type>(graph, inputFile);
   } else {
@@ -548,18 +587,10 @@ int main(int argc, char** argv) {
   galois::preAlloc(numThreads +
                    approxNodeData / galois::runtime::pagePoolSize());
 
-  std::mt19937_64 rng(27491095);
-  UniDist<GNode, std::mt19937_64> udist(graph.size() - 1, rng);
+  std::vector<unsigned int> sourceIds = readSourceIds(graph.size());
 
-  for (unsigned int v = 0; v < sources.getValue(); v++) {
-    GNode s;
-    uint64_t deg;
-
-    do {
-      s   = udist();
-      deg = graph.getDegree(s);
-
-    } while (deg == 0);
+  for (unsigned int v = 0; v < sourceIds.size(); v++) {
+    GNode s = sourceIds[v];
 
     std::cout << std::endl << "source = " << s << std::endl;
     for (unsigned int i = 0; i < rounds.getValue(); i++) {
