@@ -392,25 +392,23 @@ void topoTileAlgo(Graph& graph, const GNode& source) {
 
 void trial(Graph& graph, GNode source,
            const DeltaSelector<weight_type>& delta_selector) {
-  // NOTE: unlike every other implementation in the harness, Galois initialises
-  // its distance array outside the timer. That is left as it was, so the
-  // numbers stay comparable with earlier runs; move these two statements below
-  // execTime.start() to charge the initialisation to the algorithm as the
-  // others do.
-  galois::do_all(galois::iterate(graph),
-                 [&graph](GNode n) { graph.getData(n) = SSSP::DIST_INFINITY; });
-
-  graph.getData(source) = 0;
-
   std::cout << "Running " << ALGO_NAMES[algo] << " algorithm\n";
 
   galois::StatTimer autoAlgoTimer("AutoAlgo_0");
   galois::StatTimer execTime("Timer_0");
   execTime.start();
 
-  // Inside the timed region, before the worklist is built: see delta_from_c.h
-  // for how to move this out of the timer.
+  // Delta selection and the distance-array initialisation are both charged to
+  // the algorithm, matching every other implementation in the harness: wasp,
+  // GAP and GBBS allocate and fill their distance array inside the timed call,
+  // and PASGAL fills its own inside sssp(). See delta_from_c.h for how to move
+  // just the delta selection back out of the timer.
   stepShift = delta_selector.Get(graph);
+
+  galois::do_all(galois::iterate(graph),
+                 [&graph](GNode n) { graph.getData(n) = SSSP::DIST_INFINITY; });
+
+  graph.getData(source) = 0;
 
   if (algo == AutoAlgo) {
     autoAlgoTimer.start();
