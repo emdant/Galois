@@ -28,6 +28,7 @@
 #include "Lonestar/BFS_SSSP.h"
 #include "Lonestar/Utils.h"
 #include "Lonestar/WsgGraph.h"
+#include "delta_from_c.h"
 
 #include "llvm/Support/CommandLine.h"
 
@@ -65,6 +66,16 @@ static cll::opt<std::string> sourcesFile(
     "sfile",
     cll::desc("File of source nodes, one per line; overrides startNode"),
     cll::init(""));
+static cll::opt<double>
+    deltaC("C",
+           cll::desc("Derive the deltastep shift at run time from "
+                     "C * mean_edge_weight / average_degree; overrides -delta"),
+           cll::init(0.0));
+static cll::opt<bool> deltaOutsideTimer(
+    "delta-outside-timer",
+    cll::desc("Compute the derived delta once before the timer instead of "
+              "inside it"),
+    cll::init(false));
 
 enum Algo {
   deltaTile = 0,
@@ -379,7 +390,13 @@ void topoTileAlgo(Graph& graph, const GNode& source) {
   galois::runtime::reportStat_Single("SSSP-topo", "rounds", rounds);
 }
 
-void trial(Graph& graph, GNode source) {
+void trial(Graph& graph, GNode source,
+           const DeltaSelector<weight_type>& delta_selector) {
+  // NOTE: unlike every other implementation in the harness, Galois initialises
+  // its distance array outside the timer. That is left as it was, so the
+  // numbers stay comparable with earlier runs; move these two statements below
+  // execTime.start() to charge the initialisation to the algorithm as the
+  // others do.
   galois::do_all(galois::iterate(graph),
                  [&graph](GNode n) { graph.getData(n) = SSSP::DIST_INFINITY; });
 
@@ -390,6 +407,10 @@ void trial(Graph& graph, GNode source) {
   galois::StatTimer autoAlgoTimer("AutoAlgo_0");
   galois::StatTimer execTime("Timer_0");
   execTime.start();
+
+  // Inside the timed region, before the worklist is built: see delta_from_c.h
+  // for how to move this out of the timer.
+  stepShift = delta_selector.Get(graph);
 
   if (algo == AutoAlgo) {
     autoAlgoTimer.start();
@@ -447,6 +468,7 @@ void trial(Graph& graph, GNode source) {
 
   std::cout << "Galois execution time: " << (double)execTime.get_usec() / 1e6
             << "s" << std::endl;
+  delta_selector.PrintLast();
 
   // Sanity checking code
   galois::GReduceMax<weight_type> maxDistance;
@@ -589,12 +611,17 @@ int main(int argc, char** argv) {
 
   std::vector<unsigned int> sourceIds = readSourceIds(graph.size());
 
+  DeltaSelector<weight_type> delta_selector(
+      stepShift.getValue(), deltaC.getValue(), deltaC.getNumOccurrences() > 0,
+      deltaOutsideTimer.getValue());
+  delta_selector.Warmup(graph); // no-op unless -delta-outside-timer
+
   for (unsigned int v = 0; v < sourceIds.size(); v++) {
     GNode s = sourceIds[v];
 
     std::cout << std::endl << "source = " << s << std::endl;
     for (unsigned int i = 0; i < rounds.getValue(); i++) {
-      trial(graph, s);
+      trial(graph, s, delta_selector);
     }
   }
   return 0;
