@@ -33,6 +33,7 @@
 #include "llvm/Support/CommandLine.h"
 
 #include <iostream>
+#include <new>
 
 namespace cll = llvm::cl;
 
@@ -115,9 +116,24 @@ typedef float weight_type;
 typedef uint32_t weight_type;
 #endif
 
+#ifdef __cpp_lib_hardware_interference_size
+constexpr static const size_t CACHE_LINE_SIZE =
+    std::hardware_destructive_interference_size;
+#else
+constexpr static const size_t CACHE_LINE_SIZE = 64;
+#endif
+
+// A node's distance, alone on its own cache line so that relaxations of
+// different nodes never falsely share one. It is still a std::atomic, so
+// galois::atomicMin and the BFS_SSSP helpers take it unchanged.
+struct alignas(CACHE_LINE_SIZE) PaddedDist : std::atomic<weight_type> {
+  using std::atomic<weight_type>::atomic;
+  using std::atomic<weight_type>::operator=;
+};
+
 //! [withnumaalloc]
 using Graph =
-    galois::graphs::LC_CSR_Graph<std::atomic<weight_type>, weight_type>::
+    galois::graphs::LC_CSR_Graph<PaddedDist, weight_type>::
         with_no_lockable<true>::type ::with_numa_alloc<true>::type;
 //! [withnumaalloc]
 typedef Graph::GraphNode GNode;
